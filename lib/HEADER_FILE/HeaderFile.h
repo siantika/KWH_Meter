@@ -21,5 +21,7 @@ it includes pin definition
 #define pin_intrBuzzer D3  //pin is attached to interrupt button for Buzzer operation.
 #define pin_intrRelay D4 // pin is attached to interrupt button for Relay operation.
 
+/* delay time for buzzer operation mode */
+#define DELAY_BUZZER 1000 // set delay time for buzzer at 1000 ms.
 #endif
 
