@@ -17,9 +17,6 @@ class HwOutput{
     void turnOnBuzzer();
     void turnOffBuzzer();
 
-    void turnOnLEDOperation();
-    void turnOffLEDOperation();
-
     void turnOnLEDWIFI();
     void turnOffLEDWIFI();
 

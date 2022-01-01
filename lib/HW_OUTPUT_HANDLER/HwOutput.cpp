@@ -2,33 +2,28 @@
 
 
 void HwOutput :: initHwOutput(){
-    pinMode(pinLEDBuzzer, OUTPUT);
-    pinMode(pinLEDOperation, OUTPUT);
+    pinMode(pinBuzzer, OUTPUT);
+    pinMode(pinRelay, OUTPUT);
     pinMode(pinLEDWIFI, OUTPUT);
     pinMode(pinLEDRelay, OUTPUT);
 
     /*Set default pins to low */
-    digitalWrite(pinLEDBuzzer, LOW);
-    digitalWrite(pinLEDOperation, LOW);
+    digitalWrite(pinBuzzer, LOW);
+    digitalWrite(pinRelay, LOW);
     digitalWrite(pinLEDWIFI, LOW);
     digitalWrite(pinLEDRelay, LOW);
 
 }
 
 void HwOutput::turnOnBuzzer(){
-    digitalWrite(pinLEDBuzzer, HIGH);
+    digitalWrite(pinBuzzer, HIGH);
+    delay(1000);
+    digitalWrite(pinBuzzer, LOW);
+    delay(1000);
 }
 
 void HwOutput::turnOffBuzzer(){
-    digitalWrite(pinLEDBuzzer, LOW);
-}
-
-void HwOutput::turnOnLEDOperation(){
-    digitalWrite(pinLEDOperation, HIGH);
-}
-
-void HwOutput::turnOffLEDOperation(){
-    digitalWrite(pinLEDOperation, LOW);
+    digitalWrite(pinBuzzer, LOW);
 }
 
 void HwOutput:: turnOnLEDWIFI(){
@@ -40,9 +35,11 @@ void HwOutput:: turnOffLEDWIFI(){
 }
 
 void HwOutput::turnOnRelay(){
+    digitalWrite(pinRelay, HIGH);
     digitalWrite(pinLEDRelay, HIGH);
 }
 
 void HwOutput:: turnOffRelay(){
     digitalWrite(pinLEDRelay, LOW);
+    digitalWrite(pinRelay, LOW);
 }
