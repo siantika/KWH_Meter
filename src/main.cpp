@@ -27,6 +27,7 @@ unsigned long lastTime = 0; // first last-time value is zero, becasue it starts 
 const long INTERVAL = 60e3; // interval for routine task function is 60 secs.
 const uint8_t ADDR_EEPROM_ENERGY = 0xA1; //eeprom  address for energy value
 const uint8_t ADDR_EEPROM_RELAYOPT = 0xAA; // eeprom address for  relay operation value 
+
 /* Wifi setup paramater */
 const char* wifi_ssid = "Supratman2";
 const char* wifi_password = "supratman231";
@@ -99,7 +100,10 @@ void routineTask();
 void lcdDisplayControl();
 
 /* Convert double to String */
-char* convertDoubleToString(double dN, char *cMJA, int iP); 
+char* convertDoubleToChar(double dN, char *cMJA, int iP); 
+
+/* Convert bool to char */
+char* convertBoolToChar(bool data);
 /* ......................................................................................*/
 
 void setup() {
@@ -156,10 +160,11 @@ void loop() {
    energyReading = 0.05; // test purpose only. don't forget to uncomment the upper syntax.
   *ptr_saldo -= energyReading; // substract saldo var with energyReading value.
   writeEeprom(ptr_saldo, ADDR_EEPROM_ENERGY);
-  convertDoubleToString(*ptr_saldo, saldoNow, 2); // convert saldo to char
+  convertDoubleToChar(*ptr_saldo, saldoNow, 2); // convert saldo to char
+      
   Serial.println(saldoNow);
   // show saldo value to LCD 16 x 2.
-  // LCD Display 
+  // LCD Display control
   lcdDisplayControl();
 
   // compare saldo var to warning limit (around 0.1 - 5 KWh).
@@ -169,6 +174,10 @@ void loop() {
     //stateBuzzer = 1; // turn on buzzer.
     stateWifi = 1; // set wifiMode to always on.
     buzzerMode(stateBuzzer); // check for buzzer operation AND EXECUTE IT.
+    client.publish(topic_saldowNow, saldoNow); // publish saldo now to topic saldoNow
+    //client.publish(topic_relayOptNow,); // publish relay operation status now ( On = '1' || Off = '0')
+    
+    
     
   }
 
@@ -177,6 +186,8 @@ void loop() {
     stateRelay = 0; // set stateRlay var to 0. it means cuttoff (main electricity is OFF)
     stateWifi = 1; // set wifiMode to always on.
     buzzerMode(stateBuzzer); // check for buzzer operation AND EXECUTE IT.
+    client.publish(topic_saldowNow, saldoNow); // publish saldo now to topic saldoNow
+    //client.publish(topic_relayOptNow, relayOPTNow ); // publish relay operation status now ( On = '1' || Off = '0')
     
   }
 
@@ -184,7 +195,7 @@ void loop() {
   else{
     //stateRelay = 1; // relay is on.
     stateWifi = 0; // wifi in modem sleep mode.
-     routineTask(); // set interrupt by time. publish and subscribe MQTT every 60 secs.
+    routineTask(); // set interrupt by time. publish and subscribe MQTT every 60 secs.
     
   }
  
@@ -277,6 +288,7 @@ void callback(char* topic, byte* payload, unsigned int length){
    *ptr_saldo= atof(getSaldo); // casting to double and store in saldo variabel using pointer.
    memset(getSaldo, 0, length); // clear getSaldo array elements.
    client.publish(topic_statusSaldo, "1"); // send status saldo data is arrived
+   //pzem.resetEnergy() // reset energy reading when top up is done.
   }
   if (strcmp(topic, topic_relayOptCommand)==0){
     // set variable relay operation to inverse value of itself
@@ -325,13 +337,14 @@ void buzzerMode(bool stateBuzzer_){
     // show the mode to LCD 16 x 2("BUZZER IS UNMUTED").
     Serial.println("Buzzer Menyala");
     HwOut.turnOnBuzzer(); //turn on buzzer / unmute
-   
+    
   }
   else if(stateBuzzer_ == 0)
   {
     // show the mode to LCD 16 x 2("BUZZER IS MUTED").
     Serial.println("Buzzer Muted");
     HwOut.turnOffBuzzer(); // turn off buzzer/muted
+    
   }
 }
 
@@ -341,11 +354,13 @@ void relayOperationMode(bool relayState){
     // shows value to LCD 16 x 2.
     Serial.println("Relay_ON");
     HwOut.turnOnRelay(); // turn relay ON and Indicator.
+   
   }
   else if(relayState == 0){
     // shows value to LCD 16 x 2.
     Serial.println("Relay_OFF");
     HwOut.turnOffRelay(); // turn relay OFF and Indicator.
+    
   }
 }
 
@@ -353,11 +368,11 @@ void relayOperationMode(bool relayState){
 
 void wifiMode(bool stateWifi_){
   if (stateWifi_ == 1){
-    HwOut.turnOnLEDWIFI();
-    statusDataArrive = 0;
+    HwOut.turnOnLEDWIFI(); // turn on wifi LED
+    statusDataArrive = 0; 
     connectWifi(); // connect wifi
     Serial.println("Wifi On");
-  // if wifi in on mode, set MQTT protocol and excute pub and sub tasks.
+  // if wifi is on, set MQTT protocol and excute pub and sub tasks.
     if (!client.connected()) {
       reconnect();
      
@@ -367,7 +382,7 @@ void wifiMode(bool stateWifi_){
   } 
   else if(stateWifi_ == 0){
     WiFi.forceSleepBegin(); // make wifi modem sleeps.
-    HwOut.turnOffLEDWIFI();
+    HwOut.turnOffLEDWIFI(); // turn off Wifi LED.
     Serial.println("Wifi sleeps");
   }
 }
@@ -381,11 +396,11 @@ void routineTask(){
       wifiMode(1); // turn on wifi and execute MQTT routine
       // while client still connect, check for operation (pub sub) ( next update: maybe yoou can use stilAlive method!!)
       client.setKeepAlive(keepAliveInterval); // set keepAlive interval. this function is 
-      //convertDoubleToString(*ptr_saldo, _saldoNow, 2);
+      //convertDoubleToChar(*ptr_saldo, _saldoNow, 2);
       while (client.loop() == true){
             client.loop();
              client.publish(topic_statusSaldo, "1", true); // true means message is retained.
-             client.publish(topic_saldowNow, saldoNow, true);
+             client.publish(topic_saldowNow, saldoNow, true); // publish saldo now.
              Serial.println(saldoNow);
              Serial.println("asdasd");
              break;
@@ -408,14 +423,34 @@ void routineTask(){
 /* LCD Display Control */
 void lcdDisplayControl(){
   // LCD display shows Saldo limit only.
+  uint8_t _lcdStateBuzzerOn = 0;
+  uint8_t _lcdStateBuzzerOff = 0;
   lcd.clear(); // clear lcd
   lcd.setCursor(3,0); 
   lcd.print("SISA SALDO: ");
   lcd.setCursor(6,1);
   lcd.print(String(*ptr_saldo));
+  delay(1000);
+  
+
+  if (stateBuzzer == 1){
+    _lcdStateBuzzerOn += 1;
+    if (_lcdStateBuzzerOn == 1 ){
+      lcd.clear();
+     lcd.print("BUZZER: ON");
+     _lcdStateBuzzerOff = 0;
+    } 
+} else if(stateBuzzer == 0){
+  _lcdStateBuzzerOff += 1;
+    if (_lcdStateBuzzerOff == 1 ){
+      lcd.clear();
+     lcd.print("BUZZER: OFF");
+     _lcdStateBuzzerOn = 0;
+    } 
+}
 }
 
-char* convertDoubleToString(double dN, char *cMJA, int iP){
+char* convertDoubleToChar(double dN, char *cMJA, int iP){
   //Ex.) char cVal[10];  float fVal=((22.0 /7.0)*256)-46.85;
 // dtoa(fVal,cVal,4); Serial.println (String(cVal));
 
@@ -437,3 +472,4 @@ char* convertDoubleToString(double dN, char *cMJA, int iP){
   while (iP>1) { if (lR< lP) { *cMJA='0'; cMJA++; } lP=lP*10;  iP--; }
   ltoa(lR, cMJA, 10); }  return ret; 
 }
+
