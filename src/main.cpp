@@ -14,6 +14,10 @@ double energyReading;
 double saldo;
 double *ptr_saldo = &saldo;
 
+/* Buzzer properties */
+ uint8_t _lcdStateBuzzerOn = 0;
+ uint8_t _lcdStateBuzzerOff = 0;
+
 char saldoNow [10]; // for sending curent saldo to MQTT. Using in Routinetask function.
 
 volatile bool stateBuzzer;
@@ -397,24 +401,13 @@ void routineTask(){
       // while client still connect, check for operation (pub sub) ( next update: maybe yoou can use stilAlive method!!)
       client.setKeepAlive(keepAliveInterval); // set keepAlive interval. this function is 
       //convertDoubleToChar(*ptr_saldo, _saldoNow, 2);
-      while (client.loop() == true){
-            client.loop();
+             client.loop();
              client.publish(topic_statusSaldo, "1", true); // true means message is retained.
              client.publish(topic_saldowNow, saldoNow, true); // publish saldo now.
              Serial.println(saldoNow);
              Serial.println("asdasd");
-             break;
-            // if data is arrived, then get out from 
-            // if (statusDataArrive == 1){
-            // // publish to broker. This method will erase the retain message by publish n (null) message to Relay Topic.
              
-            //   break;
-            // } else if(statusDataArrive == 0)
-            //   break;
-            
-            //break; // dissable for check saldo (saldo upper 5 kwh )
-      }
-      //statusDataArrive = 0; // clear status data arrive
+         
       lastTime = currentTimeMillis;
     }
   }
@@ -423,8 +416,7 @@ void routineTask(){
 /* LCD Display Control */
 void lcdDisplayControl(){
   // LCD display shows Saldo limit only.
-  uint8_t _lcdStateBuzzerOn = 0;
-  uint8_t _lcdStateBuzzerOff = 0;
+ 
   lcd.clear(); // clear lcd
   lcd.setCursor(3,0); 
   lcd.print("SISA SALDO: ");
