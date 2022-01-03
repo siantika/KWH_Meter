@@ -106,6 +106,9 @@ void lcdDisplayControl();
 /* Convert double to String */
 char* convertDoubleToChar(double dN, char *cMJA, int iP); 
 
+/* Convert Topup in Rupiah to KWH (Double data type) */
+double convertRupiahtoKWH(unsigned long _rupiah);
+
 
 /* ......................................................................................*/
 
@@ -290,7 +293,7 @@ void callback(char* topic, byte* payload, unsigned int length){
       // store data in char array / string
      getSaldo[i] = (char)payload[i];
     }
-   *ptr_saldo= atof(getSaldo); // casting to double and store in saldo variabel using pointer.
+   *ptr_saldo= convertRupiahtoKWH(atof(getSaldo)); // casting to double and sconvert to KWH
    memset(getSaldo, 0, length); // clear getSaldo array elements.
    client.publish(topic_statusSaldo, "1"); // send status saldo data is arrived
    //pzem.resetEnergy() // reset energy reading when top up is done.
@@ -466,3 +469,8 @@ char* convertDoubleToChar(double dN, char *cMJA, int iP){
   ltoa(lR, cMJA, 10); }  return ret; 
 }
 
+/* this function is used for converting Rupiah to KWH */
+double convertRupiahtoKWH(unsigned long _rupiah){
+  double _saldoKWH =  _rupiah / 1515.72;
+  return _saldoKWH;
+}
