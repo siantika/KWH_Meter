@@ -106,8 +106,7 @@ void lcdDisplayControl();
 /* Convert double to String */
 char* convertDoubleToChar(double dN, char *cMJA, int iP); 
 
-/* Convert bool to char */
-char* convertBoolToChar(bool data);
+
 /* ......................................................................................*/
 
 void setup() {
@@ -140,13 +139,13 @@ void setup() {
   /* setup for initial variabels value or methods values */
 
   stateBuzzer = 1; // buzzer mode : unmuted. 0 is muted
-  stateRelay = 0; // relay mode : OFF (Open circuit). 1 is ON.
+  stateRelay = 1; // relay mode : OFF (Open circuit). 1 is ON.
   stateWifi = 0; // wifi in sleep mode (0). 1 is ON in STA mode.
 
   
     //testing only. set saldo by myself (mandatory).
- // double valSaldo = 10;
-  //writeEeprom(&valSaldo, ADDR_EEPROM_ENERGY);
+ double valSaldo = 10;
+  writeEeprom(&valSaldo, ADDR_EEPROM_ENERGY);
   // Load Saldo value from eeprom. it uses for initialize the saldo (when device is restarted, saldo value always refer to the last value)
   *ptr_saldo = readEeprom(ADDR_EEPROM_ENERGY);
 }
@@ -192,6 +191,7 @@ void loop() {
     buzzerMode(stateBuzzer); // check for buzzer operation AND EXECUTE IT.
     client.publish(topic_saldowNow, saldoNow); // publish saldo now to topic saldoNow
     //client.publish(topic_relayOptNow, relayOPTNow ); // publish relay operation status now ( On = '1' || Off = '0')
+    detachInterrupt(digitalPinToInterrupt(pin_intrRelay)); // dissable interrupt relay (because saldo isn't enough)
     
   }
 
@@ -200,6 +200,7 @@ void loop() {
     //stateRelay = 1; // relay is on.
     stateWifi = 0; // wifi in modem sleep mode.
     routineTask(); // set interrupt by time. publish and subscribe MQTT every 60 secs.
+    attachInterrupt(digitalPinToInterrupt(pin_intrRelay), setInterruptRelay, FALLING); // enable interrupt relay
     
   }
  
