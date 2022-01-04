@@ -144,18 +144,13 @@ void setup() {
   stateRelay = 1; // relay mode : OFF (Open circuit) = 0. ON = 1.
   stateWifi = 0; // wifi in sleep mode (0). ON in STA mode = 1. OFF/sleep = 0.
 
- double coba = 10;
- double *ptr_coba = &coba;
-  
-  writeEeprom(ptr_coba, ADDR_EEPROM_ENERGY); 
-
   
     // Load Saldo value from eeprom. it uses for initialize the saldo (when device is restarted, saldo value always refer to the last value)
   saldoCheckpoint = readEeprom(ADDR_EEPROM_ENERGY);
 
  
   // Load Energy reading once for temporer data energy reading
-  firstEnergyReading = 0.01;
+  firstEnergyReading = pzem.energy();
 }
 
 // main loop.
@@ -167,7 +162,7 @@ void loop() {
   wifiMode(stateWifi); // check for wifi operation mode.
   
   // Reads energy value (KWH) from PZEM 004T (sensor) and store in energyReading variable   
-   double energyReading = 0.05;
+   double energyReading = pzem.energy();
    // doing calculation for current saldo
    saldoNow = saldoNowCalculation(saldoCheckpoint, firstEnergyReading, energyReading);
   
@@ -388,7 +383,7 @@ void lcdDisplayControl(){
   lcd.setCursor(3,0); 
   lcd.print("SISA SALDO: ");
   lcd.setCursor(6,1);
-  lcd.print(String(*ptr_saldoTopUp));
+  lcd.print(String(saldoNow));
   delay(1000);
   
   // for display Buzzer state in LCD once.
@@ -444,9 +439,9 @@ double saldoNowCalculation(double _saldoNow, double _tempEnergyReading, double _
   // First value of _tempEnergyReading must load from firstEnergyReading in setup scopes.
   
    if (_tempEnergyReading != _energyReading){
-      _saldoNow -=  _tempEnergyReading;
+      _saldoNow -=  _energyReading;
       _tempEnergyReading = _energyReading;
   }
  
-  return saldoNow;
+  return _saldoNow;
 }
