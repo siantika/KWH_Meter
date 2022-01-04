@@ -7,7 +7,7 @@ void HwOutput :: initHwOutput(){
     pinMode(pinLEDWIFI, OUTPUT);
     pinMode(pinLEDRelay, OUTPUT);
 
-    /*Set default pins to low */
+    /*Set default pins to LOW (LOW = OFF) */
     digitalWrite(pinBuzzer, LOW);
     digitalWrite(pinRelay, LOW);
     digitalWrite(pinLEDWIFI, LOW);
