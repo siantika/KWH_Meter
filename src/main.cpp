@@ -1,3 +1,13 @@
+/***************************************************************************
+ * 
+ * 
+ * 
+ ***************************************************************************
+ */
+
+
+
+
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <Wire.h>
@@ -18,6 +28,8 @@ const double limitSaldo = 5.00; // set limit saldo (Saldo - limit saldo).
 double saldoNow; // variable stores current saldo
 double firstEnergyReading; // for temporer data energy reading 
 double saldoCheckpoint; // variable holds saldo reading from eeprom (in setup scopes)
+bool errorPzemStatus; // variable stores error readig Pzem.
+
 /* Buzzer properties */
  uint8_t _lcdStateBuzzerOn = 0; // for display Buzzer state ON in LCD once when interrupt button pressed. initial is 0.
  uint8_t _lcdStateBuzzerOff = 0;  // for display Buzzer state OFF in LCD once when interrupt button pressed. initial is 0.
@@ -33,8 +45,7 @@ unsigned long currentTimeMillis;
 unsigned long lastTime = 0; // first last-time value is zero, becasue it starts from 0 sec.
 
 const long INTERVAL = 300e3; // interval for routine task function is 300 secs or 5 minutes.
-const uint8_t ADDR_EEPROM_ENERGY = 0xA1; //eeprom  address for energy value
-const uint8_t ADDR_EEPROM_RELAYOPT = 0xAA; // eeprom address for  relay operation value 
+const uint8_t ADDR_EEPROM_ENERGY = 0xAA; //eeprom  address for energy value
 
 /* Wifi setup paramater */
 const char* wifi_ssid = "Supratman2"; // SSID Wifi user
@@ -80,9 +91,10 @@ void setInterruptRelay();
 /* Connect to wifi */
 void wifiConnections(); // first function declaration (for Wifi)
 
-/* Write energy Function*/
+/* Write Saldo Function*/
 void writeEeprom(double* value, uint8_t  addr_eeprom_);
-void writeEeprom(bool* data_, uint8_t addr_eeprom_);
+
+/*Read saldo */
 double readEeprom(uint8_t addr_eeprom_);
 
 
@@ -109,6 +121,9 @@ double convertRupiahtoKWH(unsigned long _rupiah);
 
 /* Calculation of Saldo */
 double saldoNowCalculation(double _saldoNow, double _tempEnergyReading, double _energyReading);
+
+/* Error Reading Pzem Energy */
+double errorCheckPzem();
 
 
 /* ......................................................................................*/
@@ -144,13 +159,23 @@ void setup() {
   stateRelay = 1; // relay mode : OFF (Open circuit) = 0. ON = 1.
   stateWifi = 0; // wifi in sleep mode (0). ON in STA mode = 1. OFF/sleep = 0.
 
+  /* for testing, it initialize first saldo (set it as saldo instead Money in rupiah) */
+  double coba = 5.02;
+   writeEeprom(&coba, ADDR_EEPROM_ENERGY);
   
     // Load Saldo value from eeprom. it uses for initialize the saldo (when device is restarted, saldo value always refer to the last value)
   saldoCheckpoint = readEeprom(ADDR_EEPROM_ENERGY);
-
+  lcd.clear();
+  lcd.print(String(saldoCheckpoint));
+  delay(2000);
  
   // Load Energy reading once for temporer data energy reading
-  firstEnergyReading = pzem.energy();
+  firstEnergyReading = errorCheckPzem();
+  lcd.clear();
+  lcd.print(String(firstEnergyReading));
+  delay(2000);
+
+
 }
 
 // main loop.
@@ -162,10 +187,13 @@ void loop() {
   wifiMode(stateWifi); // check for wifi operation mode.
   
   // Reads energy value (KWH) from PZEM 004T (sensor) and store in energyReading variable   
-   double energyReading = pzem.energy();
+  //energyReading = errorCheckPzem();
    // doing calculation for current saldo
-   saldoNow = saldoNowCalculation(saldoCheckpoint, firstEnergyReading, energyReading);
-  
+   // saldoNow = saldoNowCalculation(saldoCheckpoint, firstEnergyReading, energyReading);
+  saldoNow = readEeprom(ADDR_EEPROM_ENERGY);
+  lcd.clear();
+  lcd.print(String(saldoNow));
+  delay (2000);
   // store saldoNow to eeprom.
   writeEeprom(&saldoNow, ADDR_EEPROM_ENERGY); 
   convertDoubleToChar(saldoNow, convertedSaldoNowToChar, 2); // convert saldo to char
@@ -178,10 +206,11 @@ void loop() {
   // compare saldo var to warning limit (around 0.1 - 5 KWh).
   // if saldo var equal to 0, turn off relay, set wifi mode to always on, stateBuzzer var is 1 (bool).
   // if saldo  var is less then 0.1 - 5 KWh, set wifi mode to always on, stateBuzzer var is 1 (bool).
-  if (saldoNow <= limitSaldo and saldoNow > 0.1){
+  if (saldoNow <= limitSaldo and saldoNow > 0){
     stateWifi = 1; // set wifiMode to always on.
     buzzerMode(stateBuzzer); // check for buzzer operation AND EXECUTE IT.
     client.publish(topic_saldowNow, convertedSaldoNowToChar); // publish saldo now to topic saldoNow
+    attachInterrupt(digitalPinToInterrupt(pin_intrRelay), setInterruptRelay, FALLING); // enable interrupt relay
         
   }
 
@@ -217,10 +246,7 @@ void connectWifi(){
     {
       delay(500);
       //Serial.println("Connecting ....");
-    }
-    Serial.print("Connected: ");
-    //Serial.println(WiFi.localIP());
-    
+    }    
   }
 }
  
@@ -287,9 +313,10 @@ void callback(char* topic, byte* payload, unsigned int length){
     }
    *ptr_saldoTopUp = convertRupiahtoKWH(atof(getSaldo)); // casting to double and convert to KWH
    saldoCheckpoint += *ptr_saldoTopUp; // add current saldo check point with top up value.
+   client.publish(topic_saldowNow, convertDoubleToChar(saldoCheckpoint, convertedSaldoNowToChar, 2)); // publish when saldo toup is done
    memset(getSaldo, 0, length); // clear getSaldo array elements.
    *ptr_saldoTopUp = 0; // reset topup value when added to saldoNow
-   
+   stateRelay = 1; // enable relay
    
    pzem.resetEnergy();// reset energy reading when top up is done.
   }
@@ -360,7 +387,7 @@ void wifiMode(bool stateWifi_){
   }
 }
 
-/* Publish and Subscribe data every 1 minute / 60 secs*/
+/* Publish and Subscribe data every 5 minute / 5 secs*/
 void routineTask(){
   if (currentTimeMillis - lastTime > INTERVAL){
     if(stateWifi == 0){
@@ -402,6 +429,13 @@ void lcdDisplayControl(){
      _lcdStateBuzzerOn = 0;
     } 
 }
+  // for display error reading in pzem (if Exixst)
+
+  if (errorPzemStatus == 1){
+    lcd.clear();
+    lcd.print("* Error Reading *");
+    delay(500);
+  }
 }
 
 char* convertDoubleToChar(double dN, char *cMJA, int iP){
@@ -441,7 +475,23 @@ double saldoNowCalculation(double _saldoNow, double _tempEnergyReading, double _
    if (_tempEnergyReading != _energyReading){
       _saldoNow -=  _energyReading;
       _tempEnergyReading = _energyReading;
-  }
+  } 
  
   return _saldoNow;
+}
+
+/* Check Error PZEM004T reading */
+// errorPzemstatus =  1 means error in reading energy . 0 means reading energy works properly.
+double errorCheckPzem(){
+  double _energyReadingNow;
+  double _checkEnergyReading = pzem.energy();
+  if (isnan(_checkEnergyReading)){
+    _energyReadingNow = 0.00; 
+    errorPzemStatus = 1; // set errorPzem var to 1. it means error in reading energy.
+  }else{
+    _energyReadingNow = _checkEnergyReading; // if ther is no error in reading energy, set energy reading as the reading value.
+    errorPzemStatus = 0; //  it means no error.
+  }
+
+  return _energyReadingNow;
 }
