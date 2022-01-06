@@ -45,7 +45,7 @@ unsigned long currentTimeMillis;
 unsigned long lastTime = 0; // first last-time value is zero, becasue it starts from 0 sec.
 
 const long INTERVAL = 300e3; // interval for routine task function is 300 secs or 5 minutes.
-const uint8_t ADDR_EEPROM_ENERGY = 0xAA; //eeprom  address for energy value
+const int ADDR_EEPROM_ENERGY = 0xAB; //eeprom  address for energy value
 
 /* Wifi setup paramater */
 const char* wifi_ssid = "Supratman2"; // SSID Wifi user
@@ -79,7 +79,7 @@ HwOutput HwOut;
  LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 /* Create an instance for PZEM  */
- PZEM004Tv30 pzem(Serial); // comunication uses Serial (UART0). If you want to debug using serial monitor, it has to be disabled. (For final, you have delete / comment all //Serial.println syntax)!  
+PZEM004Tv30 pzem(Serial); // comunication uses Serial (UART0). If you want to debug using serial monitor, it has to be disabled. (For final, you have delete / comment all //Serial.println syntax)!  
 
 /* .....................................................................................*/
 // initialize function.
@@ -129,7 +129,7 @@ double errorCheckPzem();
 /* ......................................................................................*/
 
 void setup() {
-  //Serial.begin(115200); // serial communications speedbegin at 115200 
+  Serial.begin(115200); // serial communications speedbegin at 115200 
   //Serial.println("Mulai");
   lcd.clear();
   lcd.begin();
@@ -160,8 +160,10 @@ void setup() {
   stateWifi = 0; // wifi in sleep mode (0). ON in STA mode = 1. OFF/sleep = 0.
 
   /* for testing, it initialize first saldo (set it as saldo instead Money in rupiah) */
-  double coba = 5.02;
-   writeEeprom(&coba, ADDR_EEPROM_ENERGY);
+  double coba = 10.55 d;
+  double *ptr_coba = &coba;
+   writeEeprom(ptr_coba, ADDR_EEPROM_ENERGY);
+   delay(2000);
   
     // Load Saldo value from eeprom. it uses for initialize the saldo (when device is restarted, saldo value always refer to the last value)
   saldoCheckpoint = readEeprom(ADDR_EEPROM_ENERGY);
@@ -169,11 +171,7 @@ void setup() {
   lcd.print(String(saldoCheckpoint));
   delay(2000);
  
-  // Load Energy reading once for temporer data energy reading
-  firstEnergyReading = errorCheckPzem();
-  lcd.clear();
-  lcd.print(String(firstEnergyReading));
-  delay(2000);
+
 
 
 }
@@ -192,8 +190,9 @@ void loop() {
    // saldoNow = saldoNowCalculation(saldoCheckpoint, firstEnergyReading, energyReading);
   saldoNow = readEeprom(ADDR_EEPROM_ENERGY);
   lcd.clear();
-  lcd.print(String(saldoNow));
-  delay (2000);
+  lcd.print(String(saldoNow,2));
+  Serial.println(saldoNow);
+  // delay (2000);
   // store saldoNow to eeprom.
   writeEeprom(&saldoNow, ADDR_EEPROM_ENERGY); 
   convertDoubleToChar(saldoNow, convertedSaldoNowToChar, 2); // convert saldo to char
@@ -312,13 +311,14 @@ void callback(char* topic, byte* payload, unsigned int length){
      getSaldo[i] = (char)payload[i];
     }
    *ptr_saldoTopUp = convertRupiahtoKWH(atof(getSaldo)); // casting to double and convert to KWH
+   saldoCheckpoint = 0; // reset saldo checkpoint to 0;
    saldoCheckpoint += *ptr_saldoTopUp; // add current saldo check point with top up value.
    client.publish(topic_saldowNow, convertDoubleToChar(saldoCheckpoint, convertedSaldoNowToChar, 2)); // publish when saldo toup is done
    memset(getSaldo, 0, length); // clear getSaldo array elements.
    *ptr_saldoTopUp = 0; // reset topup value when added to saldoNow
    stateRelay = 1; // enable relay
    
-   pzem.resetEnergy();// reset energy reading when top up is done.
+  pzem.resetEnergy();// reset energy reading when top up is done.
   }
    
   statusDataArrive = 1; // data is arrived.
@@ -387,7 +387,7 @@ void wifiMode(bool stateWifi_){
   }
 }
 
-/* Publish and Subscribe data every 5 minute / 5 secs*/
+/* Publish and Subscribe data every 5 minutes / 5 secs */
 void routineTask(){
   if (currentTimeMillis - lastTime > INTERVAL){
     if(stateWifi == 0){
@@ -410,7 +410,7 @@ void lcdDisplayControl(){
   lcd.setCursor(3,0); 
   lcd.print("SISA SALDO: ");
   lcd.setCursor(6,1);
-  lcd.print(String(saldoNow));
+  lcd.print(String(saldoNow,2));
   delay(1000);
   
   // for display Buzzer state in LCD once.
@@ -468,15 +468,10 @@ double convertRupiahtoKWH(unsigned long _rupiah){
 }
 
 /* saldo nowcalculation function */
-double saldoNowCalculation(double _saldoNow, double _tempEnergyReading, double _energyReading){
-  // saldo only decreased by energy reading when energyReading is not same as _tempEnergyReading.
-  // First value of _tempEnergyReading must load from firstEnergyReading in setup scopes.
+// InitialCheckpointSaldo must load once in eeprom.
+double saldoNowCalculation(double _saldoNow, double _initialCheckpointSaldo, double _energyReading){
+  _saldoNow = _initialCheckpointSaldo - _energyReading;
   
-   if (_tempEnergyReading != _energyReading){
-      _saldoNow -=  _energyReading;
-      _tempEnergyReading = _energyReading;
-  } 
- 
   return _saldoNow;
 }
 
