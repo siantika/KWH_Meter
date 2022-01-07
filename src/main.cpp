@@ -45,7 +45,7 @@ unsigned long currentTimeMillis;
 unsigned long lastTime = 0; // first last-time value is zero, becasue it starts from 0 sec.
 
 const long INTERVAL = 300e3; // interval for routine task function is 300 secs or 5 minutes.
-const int ADDR_EEPROM_ENERGY = 0xAB; //eeprom  address for energy value
+const int ADDR_EEPROM_ENERGY = 1; //eeprom  address for energy value
 
 /* Wifi setup paramater */
 const char* wifi_ssid = "Supratman2"; // SSID Wifi user
@@ -91,12 +91,31 @@ void setInterruptRelay();
 /* Connect to wifi */
 void wifiConnections(); // first function declaration (for Wifi)
 
-/* Write Saldo Function*/
-void writeEeprom(double* value, uint8_t  addr_eeprom_);
+//We create two fucntions for writing and reading data from the EEPROM
+template <class T> int EEPROM_writeAnything(int ee, const T& value)
 
-/*Read saldo */
-double readEeprom(uint8_t addr_eeprom_);
+{ 
+    EEPROM.begin(512);
+    const byte* p = (const byte*)(const void*)&value;
+    unsigned int i;
+    for (i = 0; i < sizeof(value); i++)
+          EEPROM.write(ee++, *p++);
+    
+    EEPROM.end();
+    return i;
+}
 
+template <class T> int EEPROM_readAnything(int ee, T& value)
+{
+     EEPROM.begin(512);
+    byte* p = (byte*)(void*)&value;
+    unsigned int i;
+    for (i = 0; i < sizeof(value); i++)
+          *p++ = EEPROM.read(ee++);
+    
+     EEPROM.end();
+    return i;
+}
 
 /* MQTT Functions */
 void callback(char* topic, byte* payload, unsigned int length);
@@ -129,7 +148,7 @@ double errorCheckPzem();
 /* ......................................................................................*/
 
 void setup() {
-  Serial.begin(115200); // serial communications speedbegin at 115200 
+  //Serial.begin(115200); // serial communications speedbegin at 115200 
   //Serial.println("Mulai");
   lcd.clear();
   lcd.begin();
@@ -160,19 +179,15 @@ void setup() {
   stateWifi = 0; // wifi in sleep mode (0). ON in STA mode = 1. OFF/sleep = 0.
 
   /* for testing, it initialize first saldo (set it as saldo instead Money in rupiah) */
-  double coba = 10.55 d;
-  double *ptr_coba = &coba;
-   writeEeprom(ptr_coba, ADDR_EEPROM_ENERGY);
-   delay(2000);
+  //  double coba = 0.00;
+  //  EEPROM_writeAnything(ADDR_EEPROM_ENERGY, coba);
   
-    // Load Saldo value from eeprom. it uses for initialize the saldo (when device is restarted, saldo value always refer to the last value)
-  saldoCheckpoint = readEeprom(ADDR_EEPROM_ENERGY);
-  lcd.clear();
-  lcd.print(String(saldoCheckpoint));
-  delay(2000);
+  // Load Saldo value from eeprom. it uses for initialize the saldo (when device is restarted, saldo value always refer to the last value)
+   EEPROM_readAnything (ADDR_EEPROM_ENERGY, saldoCheckpoint);
+
+  // load initial energy reading
+  firstEnergyReading = errorCheckPzem();
  
-
-
 
 }
 
@@ -185,16 +200,12 @@ void loop() {
   wifiMode(stateWifi); // check for wifi operation mode.
   
   // Reads energy value (KWH) from PZEM 004T (sensor) and store in energyReading variable   
-  //energyReading = errorCheckPzem();
+  energyReading = errorCheckPzem();
    // doing calculation for current saldo
-   // saldoNow = saldoNowCalculation(saldoCheckpoint, firstEnergyReading, energyReading);
-  saldoNow = readEeprom(ADDR_EEPROM_ENERGY);
-  lcd.clear();
-  lcd.print(String(saldoNow,2));
-  Serial.println(saldoNow);
-  // delay (2000);
+   saldoNow = saldoNowCalculation(saldoCheckpoint, firstEnergyReading,  energyReading);
+  // readEeprom(ADDR_EEPROM_ENERGY, saldoNow);  
   // store saldoNow to eeprom.
-  writeEeprom(&saldoNow, ADDR_EEPROM_ENERGY); 
+  // writeEeprom(&saldoNow, ADDR_EEPROM_ENERGY); 
   convertDoubleToChar(saldoNow, convertedSaldoNowToChar, 2); // convert saldo to char
       
   //Serial.println(saldoNow);
@@ -248,25 +259,6 @@ void connectWifi(){
     }    
   }
 }
- 
-
-/* Write energy value in eeprom */ 
-void writeEeprom(double* data_, uint8_t ADDR_EEPROM_){
-  
-  EEPROM.begin(512); // initialize addres memory used in EEPROM
-  EEPROM.write(ADDR_EEPROM_, *data_); // write  data value in eeprom
-  EEPROM.commit(); // store data in selected memory address in eeprom
-  EEPROM.end(); // end the EEPROM writes procces
-}
-
-/* Read data value from eeprom */
-double readEeprom(uint8_t addr_eeprom_){
-  EEPROM.begin(512);
-  double data_read = EEPROM.read(addr_eeprom_); // get value according to specific address in eeprom
-  EEPROM.end(); // end the EEPROM read procces
-  return data_read;
-}
-
 
 /* Interrupt function */
 // ICACHE_RAM_ATTR means the function will put in RAM not in FLASH (in esp ISR, you have to put interrupt function in RAM)
@@ -306,18 +298,17 @@ void callback(char* topic, byte* payload, unsigned int length){
   
   if (strcmp(topic, topic_topUpSaldo)==0){
     // add saldo variable with this value
-    for (int i = 0; i < length; i++){
+    for (uint16_t i = 0; i < length; i++){
       // store data in char array / string
      getSaldo[i] = (char)payload[i];
     }
    *ptr_saldoTopUp = convertRupiahtoKWH(atof(getSaldo)); // casting to double and convert to KWH
-   saldoCheckpoint = 0; // reset saldo checkpoint to 0;
-   saldoCheckpoint += *ptr_saldoTopUp; // add current saldo check point with top up value.
+   saldoCheckpoint = saldoNow + *ptr_saldoTopUp; // add current saldo check point with top up value.
+   EEPROM_writeAnything(ADDR_EEPROM_ENERGY, saldoCheckpoint); // store saldoNow to EEPROM
    client.publish(topic_saldowNow, convertDoubleToChar(saldoCheckpoint, convertedSaldoNowToChar, 2)); // publish when saldo toup is done
    memset(getSaldo, 0, length); // clear getSaldo array elements.
    *ptr_saldoTopUp = 0; // reset topup value when added to saldoNow
    stateRelay = 1; // enable relay
-   
   pzem.resetEnergy();// reset energy reading when top up is done.
   }
    
@@ -333,7 +324,7 @@ void reconnect(){
       //Serial.println("MQTT reconnected succesfuly"); 
       client.subscribe(topic_topUpSaldo,qos); //resubscribe top up saldo ...
     }else{
-      Serial.print("Failed, rc=");
+      //Serial.print("Failed, rc=");
       //Serial.println(client.state()); // check the error code meaning on MQTT PubSubClients documentation
       delay(5000); // wait 5 seconds before trying again
     }
@@ -469,8 +460,13 @@ double convertRupiahtoKWH(unsigned long _rupiah){
 
 /* saldo nowcalculation function */
 // InitialCheckpointSaldo must load once in eeprom.
-double saldoNowCalculation(double _saldoNow, double _initialCheckpointSaldo, double _energyReading){
-  _saldoNow = _initialCheckpointSaldo - _energyReading;
+double saldoNowCalculation(double _saldoNow, double  _tempEnergyReading, double _energyReading){
+  
+
+  if (_tempEnergyReading  != _energyReading){
+    _saldoNow -=  _energyReading;
+     _tempEnergyReading = _energyReading;
+  }
   
   return _saldoNow;
 }
