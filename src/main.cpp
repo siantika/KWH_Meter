@@ -1,11 +1,11 @@
 /***************************************************************************
- * 
- * 
- * 
+ * Created by: I Putu Pawesi Siantika. email: csiantka@gmail.com           *
+ * KWh Meter Version 1.0                                                   *
+ * Monitoring energy consumption, Topping up or checking saldo via android *
+ * This is open source code. Please include my name in copies of this code *
+ * Thankyou ...                                                            *
  ***************************************************************************
  */
-
-
 
 
 #include <Arduino.h>
@@ -19,81 +19,49 @@
 #include <PubSubClient.h>
 
 
-/* Variabel initialize */
 double energyReading;
 double saldoTopUp;
-double *ptr_saldoTopUp = &saldoTopUp; // initialize pointer of saldo top up variabel
+double *ptr_saldoTopUp = &saldoTopUp; 
 double rupiahPerKWH = 1154.73; // price of 1 KWH in year 2022 (Bali,IDN)
-const double limitSaldo = 5.00; // set limit saldo (Saldo - limit saldo). 
-double saldoNow; // variable stores current saldo
-double firstEnergyReading; // for temporer data energy reading 
-double saldoCheckpoint; // variable holds saldo reading from eeprom (in setup scopes)
-bool errorPzemStatus; // variable stores error readig Pzem.
-
-/* Buzzer properties */
- uint8_t _lcdStateBuzzerOn = 0; // for display Buzzer state ON in LCD once when interrupt button pressed. initial is 0.
- uint8_t _lcdStateBuzzerOff = 0;  // for display Buzzer state OFF in LCD once when interrupt button pressed. initial is 0.
-
-char convertedSaldoNowToChar [10]; // for sending curent saldo to MQTT. Using it in Routinetask function. (for store converte saldo (double data type to char))
-
-volatile bool stateBuzzer; // for parameter of buzzerMode function.
-volatile bool stateRelay; // for parameter of relayOperationMode function.
-volatile bool stateWifi; // for parameter of wifiMode function.
-
-// variable for timer routine Tsk Function.
+const double limitSaldo = 5.00;  
+double saldoNow; 
+double firstEnergyReading; 
+double saldoCheckpoint; 
+bool errorPzemStatus;
+uint8_t _lcdStateBuzzerOn = 0;  
+uint8_t _lcdStateBuzzerOff = 0;  
+char convertedSaldoNowToChar [10]; 
+volatile bool stateBuzzer; 
+volatile bool stateRelay; 
+volatile bool stateWifi; 
 unsigned long currentTimeMillis;
-unsigned long lastTime = 0; // first last-time value is zero, becasue it starts from 0 sec.
-
-const long INTERVAL = 300e3; // interval for routine task function is 300 secs or 5 minutes.
-const int ADDR_EEPROM_ENERGY = 1; //eeprom  address for energy value
-
-/* Wifi setup paramater */
-const char* wifi_ssid = "Supratman2"; // SSID Wifi user
-const char* wifi_password = "supratman231"; // Password Wifi user
-
-/* ................................................................................. */
-
-
-/* MQTT Variable */
-bool statusDataArrive; // for status data (arrive or not) in callback function
-const char* mqtt_server = "test.mosquitto.org"; // broker server mqtt (test.mosquitto.org)
+unsigned long lastTime = 0; 
+const long INTERVAL = 300e3; 
+const int ADDR_EEPROM_ENERGY = 1; 
+const char* wifi_ssid = "Supratman2"; 
+const char* wifi_password = "supratman231"; 
+const char* mqtt_server = "test.mosquitto.org"; 
 long lastMsg = 0;
 char msg[50];
 int value = 0;
-const uint16_t keepAliveInterval = 10; // variable for keepAlive interval. Comunication beetween broker and device lives for 10 secs.
-String clientID = "Vimana_KWH_Meter_1"; // client ID for MQTT user.
+const uint16_t keepAliveInterval = 10;
+String clientID = "Vimana_KWH_Meter_1"; 
 const int port = 1883; // this port is not encrypted (1883). encrypted port is 8883 (it doesnt support in this library).
 const char* topic_saldowNow = "Vimana_Electronic/KWH_Meter/KWH_1/Saldo_Now";
 const char* topic_topUpSaldo = "Vimana_Electronic/KWH_Meter/KWH_1/Topup_Saldo";
-const char statusTopUpSaldo [2] = "1"; // payload for status saldo (sent = '1' || not yet = '0').
-/* ----------------------------------------------------------------------------------- */
 
-/* MQTT instance  */
-WiFiClient espClient; // create client (if you want to secure connection (using TLS) you have to change WiFiClient to WiFiClientSecure)
+WiFiClient espClient; //  if you want to secure connection (using TLS) you have to change WiFiClient to WiFiClientSecure
 PubSubClient client(espClient);
-
-/* Create an instance from HwOutput class*/
 HwOutput HwOut;
-
-/* Create an instance from LiquidCrystal_I2C.h */
  LiquidCrystal_I2C lcd(0x27, 16, 2);
+PZEM004Tv30 pzem(Serial); // comunication uses Serial (UART0).
 
-/* Create an instance for PZEM  */
-PZEM004Tv30 pzem(Serial); // comunication uses Serial (UART0). If you want to debug using serial monitor, it has to be disabled. (For final, you have delete / comment all //Serial.println syntax)!  
-
-/* .....................................................................................*/
-// initialize function.
-
-/* Declare interrupt functions */
 void setInterruptBuzzer();
 void setInterruptRelay();
+void wifiConnections(); 
 
-/* Connect to wifi */
-void wifiConnections(); // first function declaration (for Wifi)
-
-//We create two fucntions for writing and reading data from the EEPROM
+//For this functions,  YOU HAVE TO put all function body here.
 template <class T> int EEPROM_writeAnything(int ee, const T& value)
-
 { 
     EEPROM.begin(512);
     const byte* p = (const byte*)(const void*)&value;
@@ -104,7 +72,6 @@ template <class T> int EEPROM_writeAnything(int ee, const T& value)
     EEPROM.end();
     return i;
 }
-
 template <class T> int EEPROM_readAnything(int ee, T& value)
 {
      EEPROM.begin(512);
@@ -117,294 +84,203 @@ template <class T> int EEPROM_readAnything(int ee, T& value)
     return i;
 }
 
-/* MQTT Functions */
+
 void callback(char* topic, byte* payload, unsigned int length);
 void reconnect();
-
-/* initialize buzzerMode() and relaOperationMode() */
 void buzzerMode(bool stateBuzzer);
 void relayOperationMode(bool stateRelay);
 void wifiMode(bool stateRelay_);
-
-/* Routine Task Function */
 void routineTask();
-
-/* LCD Display Control */
 void lcdDisplayControl();
-
-/* Convert double to String */
 char* convertDoubleToChar(double dN, char *cMJA, int iP); 
-
-/* Convert Topup in Rupiah to KWH (Double data type) */
 double convertRupiahtoKWH(unsigned long _rupiah);
-
-/* Calculation of Saldo */
 double saldoNowCalculation(double _saldoNow, double _tempEnergyReading, double _energyReading);
-
-/* Error Reading Pzem Energy */
 double errorCheckPzem();
 
 
-/* ......................................................................................*/
-
 void setup() {
-  //Serial.begin(115200); // serial communications speedbegin at 115200 
-  //Serial.println("Mulai");
   lcd.clear();
   lcd.begin();
   lcd.backlight();
-  lcd.print("* LCD SIAP *"); // print String " LCD SIAP" once (TESTING PURPOSE)
-  delay (5000); // delay for 5 secs.
-  //Serial.println("...................");
-  /* set up pin interrupt for buzzer and relay */
+  lcd.print("* LCD SIAP *"); 
+  delay (5000); 
+  
   pinMode(pin_intrBuzzer, INPUT);
   pinMode(pin_intrRelay, INPUT);
 
-  /* Initialize interrupt pin, function, and mode */
-  attachInterrupt(digitalPinToInterrupt(pin_intrBuzzer), setInterruptBuzzer, FALLING); // interrupt for buzzer (on/mute)
-  attachInterrupt(digitalPinToInterrupt(pin_intrRelay), setInterruptRelay, FALLING); // interrupt for relay (open / close main circuit (AC POWER))
+  attachInterrupt(digitalPinToInterrupt(pin_intrBuzzer), setInterruptBuzzer, FALLING); 
+  attachInterrupt(digitalPinToInterrupt(pin_intrRelay), setInterruptRelay, FALLING); 
 
-  /* initialize HwOut instance(object) */
   HwOut.initHwOutput();
 
 /* MQTT Setup */
-  client.setServer(mqtt_server, port); // set broker server and port usage
-  client.setCallback(callback); // while data arriving, this method will handles it.
-  client.setKeepAlive(keepAliveInterval); // set keepAlive interval. this function is 
+  client.setServer(mqtt_server, port); 
+  client.setCallback(callback); // while data arriving form MQTT Broker, this method will handles it.
+  client.setKeepAlive(keepAliveInterval); 
  
-  /* setup for initial variabels value or methods values */
+  // ON = 1. OFF = 0;
+  stateBuzzer = 1; 
+  stateRelay = 1; 
+  stateWifi = 0; 
 
-  stateBuzzer = 1; // buzzer mode : unmuted = 1. Muted = 0.
-  stateRelay = 1; // relay mode : OFF (Open circuit) = 0. ON = 1.
-  stateWifi = 0; // wifi in sleep mode (0). ON in STA mode = 1. OFF/sleep = 0.
-
-  /* for testing, it initialize first saldo (set it as saldo instead Money in rupiah) */
-  //  double coba = 0.00;
-  //  EEPROM_writeAnything(ADDR_EEPROM_ENERGY, coba);
-  
-  // Load Saldo value from eeprom. it uses for initialize the saldo (when device is restarted, saldo value always refer to the last value)
-   EEPROM_readAnything (ADDR_EEPROM_ENERGY, saldoCheckpoint);
-
-  // load initial energy reading
+  EEPROM_readAnything (ADDR_EEPROM_ENERGY, saldoCheckpoint);
   firstEnergyReading = errorCheckPzem();
- 
-
 }
 
-// main loop.
 void loop() {
-  // start timer millis for routineTask ()
   currentTimeMillis = millis();
  
-  relayOperationMode(stateRelay); // check for relay operation mode.  
-  wifiMode(stateWifi); // check for wifi operation mode.
-  
-  // Reads energy value (KWH) from PZEM 004T (sensor) and store in energyReading variable   
+  relayOperationMode(stateRelay); 
+  wifiMode(stateWifi);   
   energyReading = errorCheckPzem();
-   // doing calculation for current saldo
-   saldoNow = saldoNowCalculation(saldoCheckpoint, firstEnergyReading,  energyReading);
-  // readEeprom(ADDR_EEPROM_ENERGY, saldoNow);  
-  // store saldoNow to eeprom.
-  // writeEeprom(&saldoNow, ADDR_EEPROM_ENERGY); 
-  convertDoubleToChar(saldoNow, convertedSaldoNowToChar, 2); // convert saldo to char
-      
-  //Serial.println(saldoNow);
-  // show saldo value to LCD 16 x 2.
-  // LCD Display control
+  saldoNow = saldoNowCalculation(saldoCheckpoint, firstEnergyReading,  energyReading);
+  convertDoubleToChar(saldoNow, convertedSaldoNowToChar, 2); 
   lcdDisplayControl();
 
-  // compare saldo var to warning limit (around 0.1 - 5 KWh).
-  // if saldo var equal to 0, turn off relay, set wifi mode to always on, stateBuzzer var is 1 (bool).
-  // if saldo  var is less then 0.1 - 5 KWh, set wifi mode to always on, stateBuzzer var is 1 (bool).
   if (saldoNow <= limitSaldo and saldoNow > 0){
-    stateWifi = 1; // set wifiMode to always on.
-    buzzerMode(stateBuzzer); // check for buzzer operation AND EXECUTE IT.
-    client.publish(topic_saldowNow, convertedSaldoNowToChar); // publish saldo now to topic saldoNow
-    attachInterrupt(digitalPinToInterrupt(pin_intrRelay), setInterruptRelay, FALLING); // enable interrupt relay
-        
+    stateWifi = 1; 
+    buzzerMode(stateBuzzer); 
+    client.publish(topic_saldowNow, convertedSaldoNowToChar); 
+    attachInterrupt(digitalPinToInterrupt(pin_intrRelay), setInterruptRelay, FALLING); 
   }
 
   else if(saldoNow <= 0){
-    stateRelay = 0; // set stateRlay var to 0. it means cuttoff (main electricity is OFF)
-    stateWifi = 1; // set wifiMode to always on.
-    saldoNow = 0; // set saldo = 0 KWH.
-    buzzerMode(stateBuzzer); // check for buzzer operation AND EXECUTE IT.
-    client.publish(topic_saldowNow, convertedSaldoNowToChar); // publish saldo now to topic saldoNow
-    detachInterrupt(digitalPinToInterrupt(pin_intrRelay)); // dissable interrupt relay (because saldo isn't enough)
+    stateRelay = 0; 
+    stateWifi = 1; 
+    saldoNow = 0; 
+    buzzerMode(stateBuzzer);
+    client.publish(topic_saldowNow, convertedSaldoNowToChar); 
+    detachInterrupt(digitalPinToInterrupt(pin_intrRelay)); 
     
   }
-
-  // it means saldo is enough to doing operation.  
   else{
-    stateWifi = 0; // wifi in modem sleep mode.
-    routineTask(); // set interrupt by time. publish and subscribe MQTT every 300 secs.
-    attachInterrupt(digitalPinToInterrupt(pin_intrRelay), setInterruptRelay, FALLING); // enable interrupt relay
+    stateWifi = 0; 
+    routineTask(); 
+    attachInterrupt(digitalPinToInterrupt(pin_intrRelay), setInterruptRelay, FALLING); 
     
   }
- 
- 
-  delay(2000); // delay for main loop
+  delay(2000); 
 }
 
-
-
-/* Wifi Connection Function*/
 void connectWifi(){
   if( WiFi.status() != WL_CONNECTED){
     WiFi.begin(wifi_ssid, wifi_password);
     while (WiFi.status() != WL_CONNECTED)
     {
       delay(500);
-      //Serial.println("Connecting ....");
     }    
   }
 }
 
-/* Interrupt function */
-// ICACHE_RAM_ATTR means the function will put in RAM not in FLASH (in esp ISR, you have to put interrupt function in RAM)
-// when buzzer interrupt button is pressed
+
 ICACHE_RAM_ATTR void setInterruptBuzzer(){    
       stateBuzzer = !stateBuzzer;
-      // create dummy delay 
       int _dummyDelay = 0;
       
-      //debouncing method.
-      for (int i=0; i<2000; i++)
-      
+      //Debouncing method. You Can't using delay() in ISR.
+      for (int i=0; i<4000; i++)
         _dummyDelay +=1;
-      
-      // clear _dummyDelay variable
+
       _dummyDelay = 0;
-      
-}
-// when relay interrupt button is pressed
+  }
+
 ICACHE_RAM_ATTR void setInterruptRelay(){
     stateRelay = !stateRelay; 
     int _dummyDelay = 0;
-    //Serial.println("interrupt dari button relay"); // for testing
+  
     // debouncing method
-     for (int i=0; i<2000; i++)
+     for (int i=0; i<4000; i++)
      _dummyDelay += 1;
-     // clear _dummyDelay
+
     _dummyDelay = 0;
 }
 
-/* MQTT Properties */
 
-// callback -> call the function when data incoming (subscribe)
 void callback(char* topic, byte* payload, unsigned int length){
-  // initialize private getSaldo char for storing incoming payload.
   char getSaldo[length]; 
   
   if (strcmp(topic, topic_topUpSaldo)==0){
-    // add saldo variable with this value
     for (uint16_t i = 0; i < length; i++){
-      // store data in char array / string
      getSaldo[i] = (char)payload[i];
     }
-   *ptr_saldoTopUp = convertRupiahtoKWH(atof(getSaldo)); // casting to double and convert to KWH
-   saldoCheckpoint = saldoNow + *ptr_saldoTopUp; // add current saldo check point with top up value.
-   EEPROM_writeAnything(ADDR_EEPROM_ENERGY, saldoCheckpoint); // store saldoNow to EEPROM
-   client.publish(topic_saldowNow, convertDoubleToChar(saldoCheckpoint, convertedSaldoNowToChar, 2)); // publish when saldo toup is done
-   memset(getSaldo, 0, length); // clear getSaldo array elements.
-   *ptr_saldoTopUp = 0; // reset topup value when added to saldoNow
-   stateRelay = 1; // enable relay
-  pzem.resetEnergy();// reset energy reading when top up is done.
+
+   *ptr_saldoTopUp = convertRupiahtoKWH(atof(getSaldo)); 
+   saldoCheckpoint = saldoNow + *ptr_saldoTopUp; 
+   EEPROM_writeAnything(ADDR_EEPROM_ENERGY, saldoCheckpoint); 
+   client.publish(topic_saldowNow, convertDoubleToChar(saldoCheckpoint, convertedSaldoNowToChar, 2)); 
+   memset(getSaldo, 0, length); 
+   *ptr_saldoTopUp = 0; 
+   stateRelay = 1; 
+  pzem.resetEnergy();
   }
-   
-  statusDataArrive = 1; // data is arrived.
 }
 
-// reconnect -> reconnect when clients connection disconect
+
 void reconnect(){
-  // loop until we're reconnected
-  int qos = 1; // set qos of mqtt.
+  int qos = 1; 
   while(!client.connected()){
     if (client.connect(clientID.c_str())){
-      //Serial.println("MQTT reconnected succesfuly"); 
-      client.subscribe(topic_topUpSaldo,qos); //resubscribe top up saldo ...
+      client.subscribe(topic_topUpSaldo,qos); 
     }else{
-      //Serial.print("Failed, rc=");
-      //Serial.println(client.state()); // check the error code meaning on MQTT PubSubClients documentation
-      delay(5000); // wait 5 seconds before trying again
+      delay(5000);
     }
   }
 }
 
-/* buzzer mode operation */
+
 void buzzerMode(bool stateBuzzer_){
   if (stateBuzzer_ == 1){
-    HwOut.turnOnBuzzer(); //turn on buzzer / unmute
-    
+    HwOut.turnOnBuzzer(); 
   }
   else if(stateBuzzer_ == 0)
   {
-    HwOut.turnOffBuzzer(); // turn off buzzer/muted
+    HwOut.turnOffBuzzer(); 
   }
 }
 
-/* Relay operation mode operation */
 void relayOperationMode(bool relayState){
   if(relayState == 1){
-    HwOut.turnOnRelay(); // turn relay ON and Indicator.
-   
+    HwOut.turnOnRelay(); 
   }
   else if(relayState == 0){
-    HwOut.turnOffRelay(); // turn relay OFF and Indicator.
-    
+    HwOut.turnOffRelay();     
   }
 }
-
-/* wifi mode */ 
 
 void wifiMode(bool stateWifi_){
   if (stateWifi_ == 1){
-    HwOut.turnOnLEDWIFI(); // turn on wifi LED
-    statusDataArrive = 0; 
-    connectWifi(); // connect wifi
-    //Serial.println("Wifi On");
-  // if wifi is on, set MQTT protocol and excute pub and sub tasks.
+    HwOut.turnOnLEDWIFI(); 
+    connectWifi();
     if (!client.connected()) {
       reconnect();
-     
     }
      client.loop();
-    
   } 
   else if(stateWifi_ == 0){
-    WiFi.forceSleepBegin(); // make wifi modem sleeps.
-    HwOut.turnOffLEDWIFI(); // turn off Wifi LED.
-    //Serial.println("Wifi sleeps");
+    WiFi.forceSleepBegin(); 
+    HwOut.turnOffLEDWIFI(); 
   }
 }
 
-/* Publish and Subscribe data every 5 minutes / 5 secs */
 void routineTask(){
   if (currentTimeMillis - lastTime > INTERVAL){
     if(stateWifi == 0){
-      //Serial.println("this is routineTask func ..."); // testing purpose only
-      wifiMode(1); // turn on wifi and execute MQTT routine
+      wifiMode(1); 
              client.loop();
-             client.publish(topic_saldowNow, convertedSaldoNowToChar, true); // publish saldo now.
-             //Serial.println(saldoNow);          
-         
+             client.publish(topic_saldowNow, convertedSaldoNowToChar, true);          
       lastTime = currentTimeMillis;
     }
   }
 }
 
-/* LCD Display Control */
 void lcdDisplayControl(){
-  // LCD display shows Saldo limit only.
- 
-  lcd.clear(); // clear lcd
+  lcd.clear(); 
   lcd.setCursor(3,0); 
   lcd.print("SISA SALDO: ");
   lcd.setCursor(6,1);
   lcd.print(String(saldoNow,2));
   delay(1000);
   
-  // for display Buzzer state in LCD once.
   if (stateBuzzer == 1){
     _lcdStateBuzzerOn += 1;
     if (_lcdStateBuzzerOn == 1 ){
@@ -420,8 +296,6 @@ void lcdDisplayControl(){
      _lcdStateBuzzerOn = 0;
     } 
 }
-  // for display error reading in pzem (if Exixst)
-
   if (errorPzemStatus == 1){
     lcd.clear();
     lcd.print("* Error Reading *");
@@ -429,15 +303,10 @@ void lcdDisplayControl(){
   }
 }
 
+
+// source: https://forum.arduino.cc/t/convert-double-to-char/525251/6
+
 char* convertDoubleToChar(double dN, char *cMJA, int iP){
-  //Ex.) char cVal[10];  float fVal=((22.0 /7.0)*256)-46.85;
-// dtoa(fVal,cVal,4); //Serial.println (String(cVal));
-
-  //arguments... 
-  // float-double value, char array to fill, precision (4 is .xxxx)
-  //and... it rounds last digit
-  // source: https://forum.arduino.cc/t/convert-double-to-char/525251/6
-
   char *ret = cMJA; long lP=1; byte bW=iP;
   while (bW>0) 
   { lP=lP*10;  bW--;  }
@@ -452,37 +321,29 @@ char* convertDoubleToChar(double dN, char *cMJA, int iP){
   ltoa(lR, cMJA, 10); }  return ret; 
 }
 
-/* this function is used for converting Rupiah to KWH */
 double convertRupiahtoKWH(unsigned long _rupiah){
   double _saldoKWH =  _rupiah / rupiahPerKWH; 
   return _saldoKWH;
 }
 
-/* saldo nowcalculation function */
-// InitialCheckpointSaldo must load once in eeprom.
 double saldoNowCalculation(double _saldoNow, double  _tempEnergyReading, double _energyReading){
-  
 
   if (_tempEnergyReading  != _energyReading){
     _saldoNow -=  _energyReading;
      _tempEnergyReading = _energyReading;
   }
-  
   return _saldoNow;
 }
 
-/* Check Error PZEM004T reading */
-// errorPzemstatus =  1 means error in reading energy . 0 means reading energy works properly.
 double errorCheckPzem(){
   double _energyReadingNow;
   double _checkEnergyReading = pzem.energy();
   if (isnan(_checkEnergyReading)){
     _energyReadingNow = 0.00; 
-    errorPzemStatus = 1; // set errorPzem var to 1. it means error in reading energy.
+    errorPzemStatus = 1;
   }else{
-    _energyReadingNow = _checkEnergyReading; // if ther is no error in reading energy, set energy reading as the reading value.
-    errorPzemStatus = 0; //  it means no error.
+    _energyReadingNow = _checkEnergyReading; 
+    errorPzemStatus = 0; 
   }
-
   return _energyReadingNow;
 }
