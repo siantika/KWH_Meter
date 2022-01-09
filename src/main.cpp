@@ -1,7 +1,7 @@
 /***************************************************************************
- * Created by: I Putu Pawesi Siantika. email: csiantka@gmail.com           *
+ * Created by: I Putu Pawesi Siantika. email: csiantka@gmail.com. Jan 2022 *
  * KWh Meter Version 1.0                                                   *
- * Monitoring energy consumption, Topping up or checking saldo via android *
+ * Monitoring energy consumption, Topping up or checking energy via android*
  * This is open source code. Please include my name in copies of this code *
  * Thankyou ...                                                            *
  ***************************************************************************
@@ -53,8 +53,8 @@ const char* topic_topUpSaldo = "Vimana_Electronic/KWH_Meter/KWH_1/Topup_Saldo";
 WiFiClient espClient; //  if you want to secure connection (using TLS) you have to change WiFiClient to WiFiClientSecure
 PubSubClient client(espClient);
 HwOutput HwOut;
- LiquidCrystal_I2C lcd(0x27, 16, 2);
-PZEM004Tv30 pzem(Serial); // comunication uses Serial (UART0).
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+PZEM004Tv30 pzem(Serial); // comunication uses Serial (UART0). Make sure you don't use Serial comunication terminal.
 
 void setInterruptBuzzer();
 void setInterruptRelay();
@@ -172,7 +172,7 @@ void connectWifi(){
   }
 }
 
-
+// You have put interrupt function in RAM instead of Flash.
 ICACHE_RAM_ATTR void setInterruptBuzzer(){    
       stateBuzzer = !stateBuzzer;
       int _dummyDelay = 0;
