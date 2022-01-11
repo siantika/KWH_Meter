@@ -38,17 +38,17 @@ unsigned long currentTimeMillis;
 unsigned long lastTime = 0; 
 const long INTERVAL = 300e3; 
 const int ADDR_EEPROM_ENERGY = 1; 
-const char* wifi_ssid = "Supratman2"; 
-const char* wifi_password = "supratman231"; 
-const char* mqtt_server = "test.mosquitto.org"; 
+const char* wifi_ssid = "";  // add wifi SSID here
+const char* wifi_password = ""; // add password wifi
+const char* mqtt_server = "";  // broker server address
 long lastMsg = 0;
 char msg[50];
 int value = 0;
 const uint16_t keepAliveInterval = 10;
 String clientID = "Vimana_KWH_Meter_1"; 
 const int port = 1883; // this port is not encrypted (1883). encrypted port is 8883 (it doesnt support in this library).
-const char* topic_saldowNow = "Vimana_Electronic/KWH_Meter/KWH_1/Saldo_Now";
-const char* topic_topUpSaldo = "Vimana_Electronic/KWH_Meter/KWH_1/Topup_Saldo";
+const char* topic_saldowNow = ""; // add topic saldo now directory in broker server
+const char* topic_topUpSaldo = ""; // add topic saldo top up directory in broker server
 
 WiFiClient espClient; //  if you want to secure connection (using TLS) you have to change WiFiClient to WiFiClientSecure
 PubSubClient client(espClient);
