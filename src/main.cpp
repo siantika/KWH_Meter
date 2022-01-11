@@ -24,6 +24,8 @@ double saldoTopUp;
 double *ptr_saldoTopUp = &saldoTopUp; 
 double rupiahPerKWH = 1154.73; // price of 1 KWH in year 2022 (Bali,IDN)
 const double limitSaldo = 5.00;  
+const double maxCurrent = 9.50; 
+bool statusCurrentError = 0;
 double saldoNow; 
 double firstEnergyReading; 
 double saldoCheckpoint; 
@@ -92,10 +94,12 @@ void relayOperationMode(bool stateRelay);
 void wifiMode(bool stateRelay_);
 void routineTask();
 void lcdDisplayControl();
+void overCurrentProtection();
 char* convertDoubleToChar(double dN, char *cMJA, int iP); 
 double convertRupiahtoKWH(unsigned long _rupiah);
 double saldoNowCalculation(double _saldoNow, double _tempEnergyReading, double _energyReading);
 double errorCheckPzem();
+
 
 
 void setup() {
@@ -301,6 +305,16 @@ void lcdDisplayControl(){
     lcd.print("* Error Reading *");
     delay(500);
   }
+
+  // over current error display
+  if (statusCurrentError == 1){
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("MAX Current");
+    lcd.setCursor(0,1);
+    lcd.print("Please restart");
+
+  }
 }
 
 
@@ -346,4 +360,18 @@ double errorCheckPzem(){
     errorPzemStatus = 0; 
   }
   return _energyReadingNow;
+}
+
+
+// menambah fungsi over current protection (10 Amps)
+// jika pembacaan arus >= 10 amps
+// matikan relay ssr
+// isikan status short untuk lcd 
+// untuk mengembalikan operasi setelah short, alas harus di hard reset (pakai button)
+void overCurrentProtection(){
+  double _current = pzem.current();
+  if (_current >= maxCurrent){
+    HwOut.turnOffRelay();
+    statusCurrentError = 1;
+  }
 }
