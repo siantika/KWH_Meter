@@ -5,4 +5,4 @@
 
 <p>Details information about the project: <link> bit.ly/Kwh_Meter_doc </link> </P>
 
-<p> Please read "README.md" </p>
+<p> Please read "User_Manual.txt" </p>
