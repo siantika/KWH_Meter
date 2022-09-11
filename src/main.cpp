@@ -23,8 +23,8 @@ double energyReading;
 double saldoTopUp;
 double *ptr_saldoTopUp = &saldoTopUp; 
 double rupiahPerKWH = 1154.73; // price of 1 KWH in year 2022 (Bali,IDN)
-const double limitSaldo = 5.00;  
-const double maxCurrent = 9.50; 
+const double limitSaldo = 5.00;  // boundary of buzzer on
+const double maxCurrent = 9.50;  // short circuit properties
 bool statusCurrentError = 0;
 double saldoNow; 
 double firstEnergyReading; 
@@ -40,8 +40,8 @@ unsigned long currentTimeMillis;
 unsigned long lastTime = 0; 
 const long INTERVAL = 300e3; 
 const int ADDR_EEPROM_ENERGY = 1; 
-const char* wifi_ssid = "Supratman2"; 
-const char* wifi_password = "supratman231"; 
+const char* wifi_ssid = "Supratman2"; // WIFI SSID 
+const char* wifi_password = "kucingsaya3"; // WIFI PASSWORD
 const char* mqtt_server = "test.mosquitto.org"; 
 long lastMsg = 0;
 char msg[50];
@@ -103,6 +103,7 @@ double errorCheckPzem();
 
 
 void setup() {
+  Serial.begin(115200);
   lcd.clear();
   lcd.begin();
   lcd.backlight();
@@ -163,7 +164,7 @@ void loop() {
     attachInterrupt(digitalPinToInterrupt(pin_intrRelay), setInterruptRelay, FALLING); 
     
   }
-  delay(2000); 
+  delay(2000); // koreksi kembali, seharusnya tidak ada delay di loop utama
 }
 
 void connectWifi(){
@@ -182,7 +183,7 @@ ICACHE_RAM_ATTR void setInterruptBuzzer(){
       int _dummyDelay = 0;
       
       //Debouncing method. You Can't using delay() in ISR.
-      for (int i=0; i<4000; i++)
+      for (int i=0; i<2000; i++)
         _dummyDelay +=1;
 
       _dummyDelay = 0;
@@ -193,7 +194,7 @@ ICACHE_RAM_ATTR void setInterruptRelay(){
     int _dummyDelay = 0;
   
     // debouncing method
-     for (int i=0; i<4000; i++)
+     for (int i=0; i<2000; i++)
      _dummyDelay += 1;
 
     _dummyDelay = 0;
@@ -367,7 +368,7 @@ double errorCheckPzem(){
 // jika pembacaan arus >= 10 amps
 // matikan relay ssr
 // isikan status short untuk lcd 
-// untuk mengembalikan operasi setelah short, alas harus di hard reset (pakai button)
+// untuk mengembalikan operasi setelah short, alat harus di hard reset (pakai button)
 void overCurrentProtection(){
   double _current = pzem.current();
   if (_current >= maxCurrent){
