@@ -17,7 +17,10 @@
 #include <EEPROM.h>
 #include <HwOutput.h>
 #include <PubSubClient.h>
+#include <ESPAsyncWebServer.h> 
+#include <AsyncElegantOTA.h> 
 
+AsyncWebServer server(80); // start server for OTA
 
 double energyReading;
 double saldoTopUp;
@@ -130,6 +133,9 @@ void setup() {
 
   EEPROM_readAnything (ADDR_EEPROM_ENERGY, saldoCheckpoint);
   firstEnergyReading = errorCheckPzem();
+
+  AsyncElegantOTA.begin(&server, "sian", "kataband2003");    // Start ElegantOTA
+  server.begin(); // OTA server
 }
 
 void loop() {
@@ -164,9 +170,10 @@ void loop() {
     attachInterrupt(digitalPinToInterrupt(pin_intrRelay), setInterruptRelay, FALLING); 
     
   }
-  delay(2000); // koreksi kembali, seharusnya tidak ada delay di loop utama
 }
 
+
+/* FUNCTIONS */
 void connectWifi(){
   if( WiFi.status() != WL_CONNECTED){
     WiFi.begin(wifi_ssid, wifi_password);
